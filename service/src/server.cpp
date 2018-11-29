@@ -59,7 +59,8 @@ void Server::closeConnect()
 
 void Server::waitForClient()
 {
-    thread handler(&Server::CreateClientThread, this);
+    thread packHandler(&Server::deal, this);
+    thread timeHandler(&Server::reTransfer, this);
     // 接收数据
     UDP_PACK pack;
     try
@@ -82,6 +83,7 @@ void Server::waitForClient()
                     WaitForSingleObject(hMutex, INFINITE);
                     recPacks.push(rec);
                     address.push(cltAddr);
+                    ipToAddr[cltAddr.sin_addr.S_un.S_addr] = cltAddr;
                     ReleaseMutex(hMutex);
                 }
                 catch (exception &err)
@@ -135,8 +137,11 @@ void Server::dealGet(string fileName, UDP_PACK pack, SOCKADDR_IN addr)
     while (!win.empty())
     {
         UDP_PACK isAckPack = win[0];
-        if (isAckPack.seq < pack.ack)
+        if (isAckPack.seq < pack.ack) {
             win.erase(win.begin());
+            // 更新超时
+            timer[addr.sin_addr.S_un.S_addr] = clock();
+        }
         else
             break;
     }
@@ -146,7 +151,6 @@ void Server::dealGet(string fileName, UDP_PACK pack, SOCKADDR_IN addr)
     {
         if (win[i].ack == pack.seq)
             win[i].ack = pack.seq + 1;
-        // sendto(serSocket, (char *)&win[i], sizeof(win[i]), 0, (sockaddr *)&addr, addrLen);
     }
 
     if (win.size() == 0)
@@ -200,6 +204,7 @@ void Server::dealGet(string fileName, UDP_PACK pack, SOCKADDR_IN addr)
                     readFile.close();
                 }
                 win.push_back(newPack);
+                timer[addr.sin_addr.S_un.S_addr] = clock();
                 sendto(serSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&addr, addrLen);
             }
             catch (exception &err)
@@ -216,7 +221,7 @@ void Server::dealGet(string fileName, UDP_PACK pack, SOCKADDR_IN addr)
     readFile.close();
 }
 
-void Server::CreateClientThread()
+void Server::deal()
 {
     while(true)
     {
@@ -250,6 +255,32 @@ void Server::CreateClientThread()
             {
                 continue;
             }
+        }
+    }
+}
+
+void Server::reTransfer() 
+{
+    while(true) 
+    {
+        map<u_long, clock_t>::iterator it = timer.begin();
+        while (it != timer.end())
+        {
+            u_long ipAddr = it->first;
+            clock_t start = it->second;
+            clock_t now = clock();
+            // 5s重传
+            if ((double)(now - start) / CLOCKS_PER_SEC > 5.0)
+            {
+                // 获取已发送未被确认的数据包
+                vector<UDP_PACK> &win = pool[ipAddr];
+                SOCKADDR_IN cltAddr = ipToAddr[ipAddr];
+                for(int i = 0; i < win.size(); ++i) 
+                {
+                    sendto(serSocket, (char *)&win[i], sizeof(win[i]), 0, (sockaddr *)&cltAddr, addrLen);
+                }
+            }
+            it++;
         }
     }
 }

@@ -41,7 +41,9 @@ class Server
 
     void dealSend(string file, UDP_PACK pack, SOCKADDR_IN addr);
 
-    void CreateClientThread();
+    void deal();
+
+    void reTransfer();
 
     // 收集得收到的数据包
     queue<UDP_PACK> recPacks;
@@ -49,10 +51,16 @@ class Server
     // 包对应的cltAddr
     queue<SOCKADDR_IN> address;
 
+    // ip对应的SOCKADDR_IN
+    map<u_long, SOCKADDR_IN> ipToAddr;
+
     // 维护各个连接的滑动窗口(发送文件)
     map<u_long, vector<UDP_PACK> > pool;
 
-  private:
+    // 计时器，超时重传
+    map <u_long, clock_t> timer;
+
+private : 
     string dataDir; // 文件地址
     int serPort;    // 服务端口
     WSADATA wsaData;
