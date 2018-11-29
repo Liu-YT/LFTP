@@ -270,7 +270,7 @@ void Server::reTransfer()
             clock_t start = it->second;
             clock_t now = clock();
             // 5s重传
-            if ((double)(now - start) / CLOCKS_PER_SEC > 5.0)
+            if (((now - start) * 1.0 / CLOCKS_PER_SEC) >= 5.0)
             {
                 // 获取已发送未被确认的数据包
                 vector<UDP_PACK> &win = pool[ipAddr];
@@ -279,6 +279,7 @@ void Server::reTransfer()
                 {
                     sendto(serSocket, (char *)&win[i], sizeof(win[i]), 0, (sockaddr *)&cltAddr, addrLen);
                 }
+                it->second = clock();
             }
             it++;
         }
