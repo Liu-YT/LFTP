@@ -13,20 +13,21 @@
 #include <queue>
 #include <map>
 #include <cstring>
+#include <thread>
 #include "package.h"
 
 using namespace std;
+using std::thread;
 
 // 滑动窗口大小
 #define winSize 5
 
 #pragma comment(lib, "ws2_32.lib")
 
+class Server
+{
 
-class Server {
-
-public:
-
+  public:
     Server(string _dir = "../data/", int port = 8888);
 
     ~Server();
@@ -39,7 +40,9 @@ public:
     void dealGet(string file, UDP_PACK pack, SOCKADDR_IN addr);
 
     void dealSend(string file, UDP_PACK pack, SOCKADDR_IN addr);
-    
+
+    void CreateClientThread();
+
     // 收集得收到的数据包
     queue<UDP_PACK> recPacks;
 
@@ -49,9 +52,9 @@ public:
     // 维护各个连接的滑动窗口(发送文件)
     map<u_long, vector<UDP_PACK> > pool;
 
-private:
+  private:
     string dataDir; // 文件地址
-    int serPort;    // 服务端口    
+    int serPort;    // 服务端口
     WSADATA wsaData;
     WORD sockVersion;
     SOCKET serSocket;
@@ -59,9 +62,10 @@ private:
     SOCKADDR_IN serAddr;
     int addrLen;
     int connectNum;
-    int MSS;        // 拥塞窗口大小
-    int ssthresh;   // 慢启动阈值
-    int cwnd;       // 拥塞窗口
+    int MSS;      // 拥塞窗口大小
+    int ssthresh; // 慢启动阈值
+    int cwnd;     // 拥塞窗口
+    int rwnd;     // 接收窗口（流量控制）
 };
 
 #endif

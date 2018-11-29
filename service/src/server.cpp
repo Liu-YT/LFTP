@@ -1,5 +1,8 @@
 #include "server.h"
 
+// 互斥锁
+HANDLE hMutex = CreateMutex(NULL, FALSE, NULL);
+
 Server::Server(string _dir, int _serPort)
 {
 
@@ -56,7 +59,7 @@ void Server::closeConnect()
 
 void Server::waitForClient()
 {
-
+    thread handler(&Server::CreateClientThread, this);
     // 接收数据
     UDP_PACK pack;
     try
@@ -76,42 +79,14 @@ void Server::waitForClient()
                 {
                     // 存储数据包
                     UDP_PACK rec = pack;
+                    WaitForSingleObject(hMutex, INFINITE);
                     recPacks.push(rec);
                     address.push(cltAddr);
+                    ReleaseMutex(hMutex);
                 }
                 catch (exception &err)
                 {
                     cerr << err.what() << endl;
-                }
-            }
-
-            // 处理数据包
-            if (!recPacks.empty())
-            {
-                UDP_PACK proPack = recPacks.front();
-                recPacks.pop();
-
-                SOCKADDR_IN addr = address.front();
-                address.pop();
-
-                /* 获取必要信息 */
-                string info = string(proPack.info);
-                string op = info.substr(0, 4);
-                string fileName = info.substr(4, pack.infoLength - 4);
-
-                if (op == "send")
-                {
-                    // cout << "lsend" << endl;
-                    dealSend(fileName, proPack, addr);
-                }
-                else if (op == "lget")
-                {
-                    // cout << "lget" << endl;
-                    dealGet(fileName, proPack, addr);
-                }
-                else
-                {
-                    continue;
                 }
             }
         }
@@ -148,7 +123,8 @@ void Server::dealGet(string fileName, UDP_PACK pack, SOCKADDR_IN addr)
     }
 
     /* 处理确认的信息 */
-    if(pack.FIN) {
+    if (pack.FIN)
+    {
         map<u_long, vector<UDP_PACK> >::iterator iter = pool.find(addr.sin_addr.S_un.S_addr);
         pool.erase(iter);
         return;
@@ -173,7 +149,7 @@ void Server::dealGet(string fileName, UDP_PACK pack, SOCKADDR_IN addr)
         // sendto(serSocket, (char *)&win[i], sizeof(win[i]), 0, (sockaddr *)&addr, addrLen);
     }
 
-    if(win.size() == 0)
+    if (win.size() == 0)
         readFile.seekg(pack.totalByte, ios::beg);
     else
         readFile.seekg(win[win.size() - 1].totalByte, ios::beg);
@@ -181,7 +157,8 @@ void Server::dealGet(string fileName, UDP_PACK pack, SOCKADDR_IN addr)
     for (int i = win.size(); i < winSize; ++i)
     {
         UDP_PACK newPack = pack;
-        if(readFile.peek() == EOF)  return;
+        if (readFile.peek() == EOF)
+            return;
         if (i >= 1)
         {
             newPack.ack = win[i - 1].ack;
@@ -216,7 +193,8 @@ void Server::dealGet(string fileName, UDP_PACK pack, SOCKADDR_IN addr)
             {
                 // 读取文件
                 readFile.read((char *)&newPack.data, newPack.dataLength);
-                if(readFile.peek() == EOF) {
+                if (readFile.peek() == EOF)
+                {
                     newPack.FIN = true;
                     newPack.dataLength = readFile.gcount();
                     readFile.close();
@@ -238,7 +216,40 @@ void Server::dealGet(string fileName, UDP_PACK pack, SOCKADDR_IN addr)
     readFile.close();
 }
 
-inline DWORD WINAPI CreateClientThread(LPVOID lpParameter)
+void Server::CreateClientThread()
 {
-    cout << "CreateClientThread" << endl;
+    while(true)
+    {
+        // 处理数据包
+        if (!recPacks.empty())
+        {
+            WaitForSingleObject(hMutex, INFINITE);
+            UDP_PACK proPack = recPacks.front();
+            recPacks.pop();
+
+            SOCKADDR_IN addr = address.front();
+            address.pop();
+            ReleaseMutex(hMutex);
+
+            /* 获取必要信息 */
+            string info = string(proPack.info);
+            string op = info.substr(0, 4);
+            string fileName = info.substr(4, proPack.infoLength - 4);
+
+            if (op == "send")
+            {
+                // cout << "lsend" << endl;
+                dealSend(fileName, proPack, addr);
+            }
+            else if (op == "lget")
+            {
+                // cout << "lget" << endl;
+                dealGet(fileName, proPack, addr);
+            }
+            else
+            {
+                continue;
+            }
+        }
+    }
 }

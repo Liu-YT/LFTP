@@ -11,6 +11,8 @@
 
 using namespace std;
 
+#define BUFFER_SIZE 2048
+
 #pragma comment(lib, "ws2_32.lib")
 
 // 滑动窗口大小
@@ -20,7 +22,7 @@ class Client
 {
 
   public:
-    Client(string _ip = "127.0.0.1", string _file = "../data/filename", int _port = 8888);
+    Client(string _ip = "127.0.0.1", string _file = "../data/", int _port = 8888);
     ~Client();
     void closeConnect();
     void lsend();
@@ -36,6 +38,7 @@ class Client
     SOCKET cltSocket;
     SOCKADDR_IN serAddr;
     int addrLen;
+    int rwnd;       // 接收窗口（流量控制）
 };
 
 #endif

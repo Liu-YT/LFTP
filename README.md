@@ -6,7 +6,7 @@
 ## 运行命令
 * 服务端
     ```shell
-    g++ server.cpp main.cpp -o lftp -lwsock32   ## 编译
+    g++ server.cpp main.cpp -o lftp -lwsock32 -std=c++11   ## 编译
     lftp.exe                                    ## 启动服务器
     ```
 * 客户端

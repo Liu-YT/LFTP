@@ -94,6 +94,11 @@ void Client::lget()
             {
                 // 没有相应文件
                 cout << "No such a file - " << file << endl;
+                UDP_PACK confirm = pack;
+                confirm.ack = pack.seq + 1;
+                confirm.seq = sendSeq;
+                confirm.FIN = true;
+                sendto(cltSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&serAddr, addrLen);
                 writerFile.close();
                 string rm = "rm -rf " + filePath;
                 system(rm.c_str());
