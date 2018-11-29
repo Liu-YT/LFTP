@@ -18,8 +18,8 @@
         ```
     * 例子
         ```shell
-        lftp.exe lget 127.0.0.1::8888 server.txt
-        lftp.exe lsend 127.0.0.1::8888 ../data/client.txt
+        lftp.exe lget 127.0.0.1:8888 server.txt
+        lftp.exe lsend 127.0.0.1:8888 ../data/client.txt
         ```
 
 ## 设计

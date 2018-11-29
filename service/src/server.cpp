@@ -211,7 +211,7 @@ void Server::dealGet(string fileName, UDP_PACK pack, SOCKADDR_IN addr)
                 break;
             }
         }
-        Sleep(10);
+        Sleep(1);
     }
     readFile.close();
 }

@@ -13,7 +13,7 @@ int main(int argc, char *argv[]) {
         string filename = argv[3];
 
         int index = serverIp.find_last_of(':');
-        string host = serverIp.substr(0, index - 1);
+        string host = serverIp.substr(0, index);
         // cout << host << endl;
         int port = atoi(serverIp.substr(index + 1).c_str());
         // cout << port << endl;

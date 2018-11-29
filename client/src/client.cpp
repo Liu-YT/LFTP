@@ -49,6 +49,34 @@ void Client::lsend()
     *   fileName 文件名，不含路径
     */
     string fileName = file.substr(file.find_last_of('/') + 1);
+
+    // 打开文件
+    ifstream readFile(file.c_str(), ios::in | ios::binary); //二进制读方式打开
+    if (readFile == NULL)
+    {
+        cout << "File: " << file << " Can Not Open To Write" << endl;
+        closeConnect();
+        exit(1);
+    }
+
+    UDP_PACK pack;
+    string str = "send" + fileName;
+    pack.infoLength = str.size();
+    for (int i = 0; i < str.size(); ++i)
+        pack.info[i] = str[i];
+    pack.info[str.size()] = '\0';
+
+    // 发送文件名
+    if (sendto(cltSocket, (char *)&pack, sizeof(pack), 0, (sockaddr *)&serAddr, addrLen) < 0)
+    {
+        cout << "Send File Name: " << file << " Failed" << endl;
+        closeConnect();
+        exit(1);
+    }
+
+    while(true) {
+
+    }
 }
 
 void Client::lget()
@@ -58,7 +86,7 @@ void Client::lget()
     */
     UDP_PACK pack;
     string str = "lget" + file;
-    pack.infoLength = str.length();
+    pack.infoLength = str.size();
     for (int i = 0; i < str.size(); ++i)
         pack.info[i] = str[i];
     pack.info[str.size()] = '\0';
@@ -89,7 +117,7 @@ void Client::lget()
     {
         if (recvfrom(cltSocket, (char *)&pack, sizeof(pack), 0, (sockaddr *)&serAddr, &addrLen) > 0)
         {
-            cout << "ack: " << pack.ack << " seq: " << pack.seq << " " << "fin " << pack.FIN << " " << pack.dataLength << endl;
+            cout << "ack: " << pack.ack << " seq: " << pack.seq << " " << "FIN: " << pack.FIN << " " << pack.dataLength << endl;
             if (pack.FIN && pack.seq == -1)
             {
                 // 没有相应文件
