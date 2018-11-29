@@ -1,5 +1,8 @@
 #include "client.h"
 
+// 互斥锁
+HANDLE hMutex = CreateMutex(NULL, FALSE, NULL);
+
 Client::Client(string _ip, string _file, int _port)
 {
 
@@ -90,6 +93,7 @@ void Client::lget()
     for (int i = 0; i < str.size(); ++i)
         pack.info[i] = str[i];
     pack.info[str.size()] = '\0';
+    pack.rwnd = RWND_MAX_SIZE - win.size();
 
     // 发送文件名 
     if (sendto(cltSocket, (char *)&pack, sizeof(pack), 0, (sockaddr *)&serAddr, addrLen) < 0)
@@ -109,14 +113,39 @@ void Client::lget()
         closeConnect();
         exit(2);
     }
+    writerFile.close();
 
-    /* 从服务器接收数据，并写入文件 */
-    int ack = 0;
-    int sendSeq = 0;
+    thread getHandle(&Client::lgetOpReponse, this);
+    
     while (true)
     {
         if (recvfrom(cltSocket, (char *)&pack, sizeof(pack), 0, (sockaddr *)&serAddr, &addrLen) > 0)
         {
+            if(win.size() < RWND_MAX_SIZE) 
+            {
+                WaitForSingleObject(hMutex, INFINITE);
+                win.push(pack);
+                ReleaseMutex(hMutex);
+            }
+        }
+    }
+    closeConnect();
+}
+
+void Client::lgetOpReponse()
+{
+    string filePath = "../data/" + file;
+    ofstream writerFile(filePath.c_str(), ios::out | ios::binary);
+    /* 从服务器接收数据，并写入文件 */
+    int ack = 0;
+    int sendSeq = 0;
+    while(true) {
+        while (!win.empty()) 
+        {
+            WaitForSingleObject(hMutex, INFINITE);
+            UDP_PACK pack = win.front();
+            win.pop();
+            ReleaseMutex(hMutex);
             cout << "ack: " << pack.ack << " seq: " << pack.seq << " " << "FIN: " << pack.FIN << " " << pack.dataLength << endl;
             if (pack.FIN && pack.seq == -1)
             {
@@ -126,6 +155,7 @@ void Client::lget()
                 confirm.ack = pack.seq + 1;
                 confirm.seq = sendSeq;
                 confirm.FIN = true;
+                confirm.rwnd = RWND_MAX_SIZE - win.size();
                 sendto(cltSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&serAddr, addrLen);
                 writerFile.close();
                 string rm = "rm -rf " + filePath;
@@ -133,18 +163,19 @@ void Client::lget()
                 closeConnect();
                 exit(0);
             }
-            if(pack.seq == ack) {
+            if (pack.seq == ack)
+            {
                 ++sendSeq;
                 ++ack;
-                
+
                 // 写入信息
                 writerFile.write((char *)&pack.data, pack.dataLength);
-
 
                 // 发送确认包
                 UDP_PACK confirm = pack;
                 confirm.ack = pack.seq + 1;
                 confirm.seq = sendSeq;
+                confirm.rwnd = RWND_MAX_SIZE - win.size();
                 sendto(cltSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&serAddr, addrLen);
                 if (pack.FIN)
                 {
@@ -156,17 +187,17 @@ void Client::lget()
                 }
                 cout << "send: ack " << confirm.ack << endl;
             }
-            else 
+            else
             {
                 ++sendSeq;
                 UDP_PACK confirm = pack;
                 confirm.ack = ack;
                 confirm.seq = sendSeq;
+                confirm.rwnd = RWND_MAX_SIZE - win.size();
                 // 如果接收的seq和期待的不相同,重新发送
                 sendto(cltSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&serAddr, addrLen);
                 cout << "send: ack " << confirm.ack << endl;
             }
-        }
+        }       
     }
-    closeConnect();
 }

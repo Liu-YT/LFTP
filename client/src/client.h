@@ -7,16 +7,17 @@
 #include <iostream>
 #include <fstream>
 #include <ctime>
+#include <thread>
+#include <vector>
+#include <queue>
 #include "package.h"
 
 using namespace std;
+using std::thread;
 
-#define BUFFER_SIZE 2048
+#define RWND_MAX_SIZE 20
 
 #pragma comment(lib, "ws2_32.lib")
-
-// 滑动窗口大小
-#define winSIZE 5
 
 class Client
 {
@@ -27,7 +28,8 @@ class Client
     void closeConnect();
     void lsend();
     void lget();
-    UDP_PACK win[winSIZE];  // 滑动窗口
+    void lgetOpReponse();
+    queue<UDP_PACK> win; // 接收窗口（流量控制）
 
   private:
     string file;      // 文件

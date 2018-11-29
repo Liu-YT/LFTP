@@ -19,9 +19,6 @@
 using namespace std;
 using std::thread;
 
-// 滑动窗口大小
-#define winSize 5
-
 #pragma comment(lib, "ws2_32.lib")
 
 class Server

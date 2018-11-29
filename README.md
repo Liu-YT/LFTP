@@ -13,9 +13,9 @@
 * 客户端
     * 说明
         ```shell
-        g++ client.cpp main.cpp -o lftp -lwsock32   ## 编译
-        lftp.exe lget server filename               ## 使用legt
-        lftp.exe lsend server filename              ## 使用lsend
+        g++ client.cpp main.cpp -o lftp -lwsock32 -std=c++11    ## 编译
+        lftp.exe lget server filename                           ## 使用legt
+        lftp.exe lsend server filename                          ## 使用lsend
         ```
     * 例子
         ```shell

@@ -149,20 +149,19 @@ void Server::dealGet(string fileName, UDP_PACK pack, SOCKADDR_IN addr)
     // 更新存储的数据包 ack
     for (int i = 0; i < win.size(); ++i)
     {
-        if (win[i].ack == pack.seq)
-            win[i].ack = pack.seq + 1;
+        win[i].ack = pack.seq + 1;
     }
 
     if (win.size() == 0)
         readFile.seekg(pack.totalByte, ios::beg);
     else
         readFile.seekg(win[win.size() - 1].totalByte, ios::beg);
+    
     // 窗口前移
-    for (int i = win.size(); i < winSize; ++i)
+    for (int i = win.size(); i < pack.rwnd; ++i)
     {
         UDP_PACK newPack = pack;
-        if (readFile.peek() == EOF)
-            return;
+        if (readFile.peek() == EOF)    return;
         if (i >= 1)
         {
             newPack.ack = win[i - 1].ack;
