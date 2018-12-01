@@ -1,14 +1,8 @@
 # server/data
-service/data/*.mp3
-service/data/*.mp4
-service/data/*.flac
-server/data/*.pdf
+service/data/
 
 # client/data
-client/data/*.mp3
-client/data/*.mp4
-client/data/*.flac
-client/data/*.pdf
+client/data/
 
 # exe
 service/src/*.exe
