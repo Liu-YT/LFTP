@@ -135,8 +135,6 @@ void Server::dealSend(string fileName, UDP_PACK pack, SOCKADDR_IN addr)
 
     int& ack = waitAck[addr.sin_addr.S_un.S_addr];
 
-    cout << "pack-seq: " << pack.seq << " ack: " << ack << endl;
-
     if (pack.seq == ack)
     {
         ack++;

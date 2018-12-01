@@ -232,9 +232,6 @@ void Client::lsendOpResponse()
     */
     string fileName = file.substr(file.find_last_of('/') + 1);
 
-    // 打开文件
-    ifstream readFile(file.c_str(), ios::in | ios::binary); //二进制读方式打开
-
     while(true) {
         if(!win.empty())
         {
@@ -279,13 +276,15 @@ void Client::lsendOpResponse()
                 pool.pop_back();
             }
 
+            // 打开文件
+            ifstream readFile(file.c_str(), ios::in | ios::binary); //二进制读方式打开
+
             if (pool.size() == 0)
                 readFile.seekg(pack.totalByte, ios::beg);
             else
                 readFile.seekg(pool[pool.size() - 1].totalByte, ios::beg);
 
             // 窗口前移
-            cerr << "  pool size: " << pool.size() << " rwnd:" << pack.rwnd << " end: " << (readFile.peek() == EOF) << endl;
             for (int i = pool.size(); i < pack.rwnd; ++i)
             {
                 if(readFile.peek() == EOF)  break;
@@ -348,11 +347,9 @@ void Client::lsendOpResponse()
                     }
                 }
             }
-                cerr << "!  pool size: " << pool.size() << " rwnd:" << pack.rwnd << endl;
             readFile.close();
         }
     }
-    readFile.close();
 }
 
 void Client::reTransfer()
