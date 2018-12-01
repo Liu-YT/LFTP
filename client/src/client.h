@@ -1,15 +1,18 @@
 #ifndef CLIENT_HPP
 #define CLIENT_HPP
 
+#include <WS2tcpip.h>
 #include <winsock2.h>
 #include <windows.h>
 #include <string>
+#include <cstring>
 #include <iostream>
 #include <fstream>
 #include <ctime>
 #include <thread>
 #include <vector>
 #include <queue>
+#include <io.h>
 #include "package.h"
 
 using namespace std;
@@ -27,17 +30,34 @@ class Client
 {
 
   public:
+
     Client(string _ip = "127.0.0.1", string _file = "../data/", int _port = 8888);
+
     ~Client();
+
     void closeConnect();
+
     void lsend();
+
     void lget();
+
     void lgetOpReponse();
+
     void lsendOpResponse();
+
     void reTransfer();
-    queue<UDP_PACK> win;   // 接收窗口（流量控制）
+
+    queue<UDP_PACK> win;    // 接收窗口（流量控制）
+
     vector<UDP_PACK> pool;  // 发送窗口
+
     clock_t timer;          // 定时器
+
+    int ssthresh;
+
+    int cwnd;       // 拥塞窗口
+
+    int errorNum;   // 冗余ack计算
 
 
   private:
@@ -49,10 +69,7 @@ class Client
     SOCKET cltSocket;
     SOCKADDR_IN serAddr;
     int addrLen;
-    int cwnd;       // 拥塞窗口
-    int rwnd;       // 接收窗口大小（流量控制）
     int MSS;
-    int ssthresh;
 };
 
 #endif

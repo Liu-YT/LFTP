@@ -27,7 +27,10 @@ int main(int argc, char *argv[]) {
             client->lsend();
         }
         else {
-            cout << "Please input as required";
+            cout << "Please input as required" << endl;
+            cout << "Usage" << endl;
+            cout << "LFTP.exe lget server file" << endl;
+            cout << "LFTP.exe lsend server file" << endl;
             exit(0);
         }        
     } catch (exception &err) {

@@ -45,6 +45,10 @@ class Server
 
     void reTransfer();
 
+    void lSend(u_long ip, string filePath);
+
+    void lGet(u_long ip, string filePath);
+
     // ip对应的SOCKADDR_IN
     map<u_long, SOCKADDR_IN> ipToAddr;
 
@@ -60,11 +64,17 @@ class Server
     // 记录发送文件连接确认号ack
     map<u_long, int> waitAck;
 
-    void lSend(u_long ip, string filePath);
+    // 拥塞窗口，发送文件
+    map<u_long, int> cwnd;
 
-    void lGet(u_long ip, string filePath);
+    // 慢启动阈值
+    map<u_long, int> ssthresh;
 
-  private : string dataDir; // 文件地址
+    // 冗余ack计算
+    map<u_long, int> errorNum;
+
+  private : 
+    string dataDir; // 文件地址
     int serPort;    // 服务端口
     WSADATA wsaData;
     WORD sockVersion;
@@ -72,10 +82,7 @@ class Server
     SOCKADDR_IN cltAddr;
     SOCKADDR_IN serAddr;
     int addrLen;
-    int MSS;      // 拥塞窗口大小
-    int ssthresh; // 慢启动阈值
-    int cwnd;     // 拥塞窗口
-    // int connectNum;
+    int MSS;     
 };
 
 #endif

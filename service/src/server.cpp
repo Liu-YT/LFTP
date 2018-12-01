@@ -3,9 +3,6 @@
 // 互斥锁
 HANDLE hMutex = CreateMutex(NULL, FALSE, NULL);
 
-// seq
-int sendSeq = 0;
-
 Server::Server(string _dir, int _serPort)
 {
 
@@ -42,8 +39,6 @@ Server::Server(string _dir, int _serPort)
 
     // 初始化拥塞窗口信息
     this->MSS = 1;
-    this->ssthresh = 32;
-    this->cwnd = MSS;
 
     cout << "Server socket created successfully..." << endl;
 }
@@ -106,6 +101,9 @@ void Server::waitForClient()
     }
 }
 
+/*
+*   创建线程处理数据包
+*/
 void Server::deal(UDP_PACK pack, u_long ip)
 {
     // 第一次连接
@@ -134,14 +132,26 @@ void Server::deal(UDP_PACK pack, u_long ip)
             else if (pack.ack == 0)
             {
                 waitAck[addr.sin_addr.S_un.S_addr] = 1;
+
                 UDP_PACK confirm = pack;
                 confirm.ack = pack.seq + 1;
-                confirm.seq = sendSeq;
+                confirm.seq = 0;
                 confirm.rwnd = RWND_MAX_SIZE;
                 confirm.FIN = false;
-                ++sendSeq;
+
+                // 防止之前的延迟包
+                map<u_long, queue<UDP_PACK>>::iterator a = pool.find(addr.sin_addr.S_un.S_addr);
+                if (a != pool.end())    pool.erase(a);
+
                 sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&addr, addrLen);
-                thread(&Server::lSend, this, ip, filePath).detach();
+                try
+                {
+                    thread(&Server::lSend, this, ip, filePath).detach();
+                }
+                catch (exception &err)
+                {
+                    cout << err.what() << endl;
+                }
             }
         }
         else if (op == "lget")
@@ -163,12 +173,18 @@ void Server::deal(UDP_PACK pack, u_long ip)
             }
             else
             {
+
+                cwnd[ip] = MSS;
+                ssthresh[ip] = 32;
+                errorNum[ip] = 0;
+
                 UDP_PACK confirm = pack;
                 confirm.ack = pack.seq + 1;
                 confirm.seq = 0;
                 confirm.FIN = false;
                 sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&cltAddr, addrLen);
-                try{
+                try
+                {
                     thread(&Server::lGet, this, ip, filePath).detach();
                 }
                 catch(exception &err){
@@ -180,32 +196,13 @@ void Server::deal(UDP_PACK pack, u_long ip)
     }
 }
 
-void Server::reTransfer() 
-{
-    while(true) 
-    {
-        map<u_long, clock_t>::iterator it = timer.begin();
-        while (it != timer.end())
-        {
-            u_long ipAddr = it->first;
-            clock_t start = it->second;
-            clock_t now = clock();
-            // 3s重传
-            if (((now - start) * 1.0 / CLOCKS_PER_SEC) >= 3.0)
-            {
-                // 获取已发送未被确认的数据包
-                queue<UDP_PACK> &buffer = bufferWin[ipAddr];
-                SOCKADDR_IN cltAddr = ipToAddr[ipAddr];
-                // 重传
-                sendto(serSocket, (char *)&buffer.front(), sizeof(buffer.front()), 0, (sockaddr *)&cltAddr, addrLen);
-                it->second = clock();
-            }
-            it++;
-        }
-    }
-}
-
-// Todo: 发送客户端请求的文件
+/*
+*   Todo: 发送客户端请求的文件
+*   
+*   param
+*       ip - 能够对应到客户端的地址信息
+*       filePath - 文件路径
+*/
 void Server::lGet(u_long ip, string filePath)
 {
 
@@ -246,6 +243,33 @@ void Server::lGet(u_long ip, string filePath)
                 return;
             }
 
+            // 调整拥塞窗口
+
+            // 正确ack
+            if(buffer.front().seq <= pack.ack)
+            {
+                /* 
+                * cwnd <= ssthresh 则 cwnd = cwnd * 2 
+                * cwnd > ssthresh 则 cwnd = cwnd + MSS 
+                */
+                if(cwnd[ip] <= ssthresh[ip])
+                    cwnd[ip] *= 2;
+                else
+                    cwnd[ip] += 1; 
+               
+            }
+            else
+            {
+                errorNum[ip]++;
+                if(errorNum[ip] == 3)
+                {
+                    // ssthresh = cwnd / 2
+                    ssthresh[ip] = cwnd[ip] / 2;
+                    // cwnd = ssthresh + 3 MMS
+                    cwnd[ip] = ssthresh[ip] + 3 * MSS;
+                }
+            }
+
             // 滑动窗口
             for (int i = 0; i < buffer.size(); ++i)
             {
@@ -275,12 +299,12 @@ void Server::lGet(u_long ip, string filePath)
                 readFile.seekg(buffer.back().totalByte, ios::beg);
 
             // 窗口前移
-            for (int i = buffer.size(); i < pack.rwnd; ++i)
+            for (int i = buffer.size(); i < pack.rwnd && i < cwnd[ip]; ++i)
             {
                 UDP_PACK newPack = pack;
                 if (i >= 1)
                 {
-                    newPack.ack = buffer.back().ack;
+                    newPack.ack = buffer.front().ack;
                     newPack.seq = buffer.back().seq + 1;
                     newPack.dataLength = DATA_SIZE;
                     newPack.totalByte = buffer.back().totalByte + newPack.dataLength;
@@ -293,6 +317,7 @@ void Server::lGet(u_long ip, string filePath)
                             newPack.FIN = true;
                         buffer.push(newPack);
                         sendto(serSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&addr, addrLen);
+                        if(readFile.peek() == EOF)  break;
                     }
                     catch (exception &err)
                     {
@@ -318,6 +343,7 @@ void Server::lGet(u_long ip, string filePath)
                         buffer.push(newPack);
                         sendto(serSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&addr, addrLen);
                         timer[addr.sin_addr.S_un.S_addr] = clock();
+                        if(readFile.peek() == EOF)  break;
                     }
                     catch (exception &err)
                     {
@@ -335,19 +361,32 @@ void Server::lGet(u_long ip, string filePath)
     }
 }
 
-// Todo: 接收客户端上传的文件
+
+/*
+*   Todo: 接收客户端上传的文件.
+*   
+*   param
+*       ip - 能够对应到客户端的地址信息
+*       filePath - 文件路径
+*/
 void Server::lSend(u_long ip, string filePath)
 {
     queue<UDP_PACK>& packs = pool[ip];
     SOCKADDR_IN addr = ipToAddr[ip];
     int &ack = waitAck[addr.sin_addr.S_un.S_addr];
-    
+    // seq
+    int sendSeq = 1;
+
     while(true) 
     {
         if(!packs.empty()) {
             while(!packs.empty()) {
+
+                WaitForSingleObject(hMutex, INFINITE);
                 UDP_PACK pack = packs.front();
                 packs.pop();
+                ReleaseMutex(hMutex);
+
                 if (pack.seq == ack)
                 {
                     ack++;
@@ -364,6 +403,7 @@ void Server::lSend(u_long ip, string filePath)
                         confirm.seq = sendSeq++;
                         confirm.rwnd = ((RWND_MAX_SIZE - packs.size() <= 0) ? 1 : RWND_MAX_SIZE - packs.size());
                         sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&addr, addrLen);
+                        cout << "0 send: " << confirm.ack << endl;
                         if (pack.FIN)
                         {
                             /* 结束 */
@@ -398,9 +438,44 @@ void Server::lSend(u_long ip, string filePath)
                     confirm.rwnd = ((RWND_MAX_SIZE - packs.size() <= 0) ? 1 : RWND_MAX_SIZE - packs.size());
                     // 如果接收的seq和期待的不相同,重新发送
                     sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&addr, addrLen);
+                    cout << "1 send: " << confirm.ack << endl;
                 }
             }
             
+        }
+    }
+}
+
+/*
+*   超时重发，调整拥塞窗口大小以及阈值
+*/
+void Server::reTransfer()
+{
+    while (true)
+    {
+        map<u_long, clock_t>::iterator it = timer.begin();
+        while (it != timer.end())
+        {
+            u_long ipAddr = it->first;
+            clock_t start = it->second;
+            clock_t now = clock();
+            // 3s重传
+            if (((now - start) * 1.0 / CLOCKS_PER_SEC) >= 3.0)
+            {
+                // ssthresh变成之前的cwnd的一半
+                ssthresh[ipAddr] = cwnd[ipAddr] / 2;
+
+                // cwnd调成1
+                cwnd[ipAddr] = MSS; 
+
+                // 获取已发送未被确认的数据包
+                queue<UDP_PACK> &buffer = bufferWin[ipAddr];
+                SOCKADDR_IN cltAddr = ipToAddr[ipAddr];
+                // 重传
+                sendto(serSocket, (char *)&buffer.front(), sizeof(buffer.front()), 0, (sockaddr *)&cltAddr, addrLen);
+                it->second = clock();
+            }
+            it++;
         }
     }
 }

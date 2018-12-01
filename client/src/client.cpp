@@ -49,6 +49,7 @@ void Client::closeConnect()
     cout << "Socket closed..." << endl;
 }
 
+// lget
 void Client::lsend()
 {
 
@@ -100,6 +101,7 @@ void Client::lsend()
     closeConnect();
 }
 
+// lsend
 void Client::lget()
 {
     /*
@@ -121,17 +123,6 @@ void Client::lget()
         exit(1);
     }
 
-    /* 打开文件，准备写入 */
-    string filePath = "../data/" + file;
-    // cout << filePath << endl;
-    ofstream writerFile(filePath.c_str(), ios::out | ios::binary);
-    if (NULL == writerFile)
-    {
-        cout << "File: " << filePath << " Can Not Open To Write" << endl;
-        closeConnect();
-        exit(2);
-    }
-    writerFile.close();
 
     // 创建处理线程
     thread getHandler(&Client::lgetOpReponse, this);
@@ -151,10 +142,27 @@ void Client::lget()
     closeConnect();
 }
 
+
+// lget thread do
 void Client::lgetOpReponse()
 {
+
+    /* 打开文件，准备写入 */
     string filePath = "../data/" + file;
+
+    // 判断文件是否已经存在
+    bool isFileExist = (_access(filePath.c_str(), 0) != -1);
+    
+    // cout << filePath << endl;
+
     ofstream writerFile(filePath.c_str(), ios::out | ios::binary);
+    if (writerFile == NULL)
+    {
+        cout << "File: " << filePath << " Can Not Open To Write" << endl;
+        closeConnect();
+        exit(2);
+    }
+
     /* 从服务器接收数据，并写入文件 */
     int ack = 0;
     int sendSeq = 0;
@@ -165,20 +173,22 @@ void Client::lgetOpReponse()
             UDP_PACK pack = win.front();
             win.pop();
             ReleaseMutex(hMutex);
-            cout << "receive: ack: " << pack.ack << " seq: " << pack.seq << " " << "FIN: " << pack.FIN << " size:" << pack.dataLength << endl;
+            cout << "receive: ack: " << pack.ack << " seq: " << pack.seq << " " << "FIN: " << pack.FIN << endl;
             if (pack.FIN && pack.seq == -1)
             {
                 // 没有相应文件
-                cout << "No such a file - " << file << endl;
+                cout << "The server no such a file - " << file << endl;
                 UDP_PACK confirm = pack;
                 confirm.ack = -1;
                 confirm.seq = sendSeq;
                 confirm.FIN = true;
                 confirm.rwnd = RWND_MAX_SIZE - win.size();
-                sendto(cltSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&serAddr, addrLen);
                 writerFile.close();
-                string rm = "rm -rf " + filePath;
-                system(rm.c_str());
+                if (!isFileExist) 
+                {
+                    string rm = "rm -rf " + filePath;
+                    system(rm.c_str());
+                }
                 closeConnect();
                 exit(0);
             }
@@ -223,6 +233,8 @@ void Client::lgetOpReponse()
     }
 }
 
+
+// lsend thread do
 void Client::lsendOpResponse()
 {
     /*
@@ -254,6 +266,31 @@ void Client::lsendOpResponse()
                 exit(0);
             }
 
+            if (pool.size() > 0 && pool[0].seq <= pack.ack)
+            {
+                // 正确ack
+                /* 
+                * cwnd <= ssthresh 则 cwnd = cwnd * 2 
+                * cwnd > ssthresh 则 cwnd = cwnd + MSS 
+                */
+                if (cwnd <= ssthresh)
+                    cwnd *= 2;
+                else
+                    cwnd += 1;
+            }
+            else
+            {
+                // 错误ack
+                errorNum++;
+                if (errorNum == 3)
+                {
+                    // ssthresh = cwnd / 2
+                    ssthresh = cwnd / 2;
+                    // cwnd = ssthresh + 3 MMS
+                    cwnd = ssthresh + 3 * MSS;
+                }
+            }
+
             // 更新滑动窗口
             int size = pool.size();
             for(int i = 0; i < pool.size(); ++i) 
@@ -283,9 +320,8 @@ void Client::lsendOpResponse()
                 readFile.seekg(pool[pool.size() - 1].totalByte, ios::beg);
 
             // 窗口前移
-            for (int i = pool.size(); i < pack.rwnd; ++i)
+            for (int i = pool.size(); i < pack.rwnd && i < cwnd; ++i)
             {
-                if(readFile.peek() == EOF)  break;
                 UDP_PACK newPack = pack;
                 if (i >= 1)
                 {
@@ -304,6 +340,7 @@ void Client::lsendOpResponse()
                         pool.push_back(newPack);
                         sendto(cltSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&serAddr, addrLen);
                         cout << "send: ack: " << newPack.ack << " seq: " << newPack.seq << " "  << "FIN: " << newPack.FIN << " size: " << newPack.dataLength << " rwnd: " << newPack.rwnd << endl;
+                        if(readFile.peek() == EOF)  break;
                     }
                     catch (exception &err)
                     {
@@ -333,6 +370,7 @@ void Client::lsendOpResponse()
                         sendto(cltSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&serAddr, addrLen);
                         timer = clock();
                         cout << "send: ack: " << newPack.ack << " seq: " << newPack.seq << " " << "FIN: " << newPack.FIN << " size: " << newPack.dataLength << " rwnd: " << newPack.rwnd << endl;
+                        if(readFile.peek() == EOF)  break;
                     }
                     catch (exception &err)
                     {
@@ -350,14 +388,24 @@ void Client::lsendOpResponse()
     }
 }
 
+/*
+*   超时重发
+*/
 void Client::reTransfer()
 {
     while (true)
     {
         clock_t now = clock();
+        
         // 3s重传
         if (((now - timer) * 1.0 / CLOCKS_PER_SEC) >= 5.0)
         {
+            // ssthresh变成之前的cwnd的一半
+            ssthresh = cwnd / 2;
+
+            // cwnd调成1
+            cwnd = MSS;
+
             // 重发已发送未被确认的数据包
             for (int i = 0; i < pool.size(); ++i)
             {
