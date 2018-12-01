@@ -158,6 +158,8 @@ void Server::deal(UDP_PACK pack, u_long ip)
                 confirm.seq = -1;
                 confirm.FIN = true;
                 sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&cltAddr, addrLen);
+                cout << "Close connection with: " << ip << endl;
+
             }
             else
             {
@@ -341,8 +343,6 @@ void Server::lSend(u_long ip, string filePath)
     while(true) 
     {
         if(!packs.empty()) {
-            cerr << "pack : " << packs.front().ack << " seq: " << packs.front().seq << " fin: " << packs.front().FIN << " " << packs.front().dataLength << endl;
-            cerr << "want: " << ack << endl;
             while(!packs.empty()) {
                 UDP_PACK pack = packs.front();
                 packs.pop();
@@ -380,6 +380,8 @@ void Server::lSend(u_long ip, string filePath)
                                 ipToAddr.erase(c);
 
                             cout << "Close connection with: " << ip << endl;
+
+                            return;
                         }
                     }
                 }
