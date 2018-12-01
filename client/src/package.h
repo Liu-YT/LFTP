@@ -4,7 +4,7 @@
 #include <string>
 using std::string;
 
-#define DATA_MAX_SIZE 2048
+#define DATA_MAX_SIZE 4096
 #define INFO_MAX_SIZE 100
 
 struct UDP_PACK

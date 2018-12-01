@@ -30,8 +30,8 @@ Client::Client(string _ip, string _file, int _port)
     this->addrLen = sizeof(serAddr);
 
     // 初始化拥塞窗口信息
-    this->MSS = 1024;
-    this->ssthresh = 4096;
+    this->MSS = 1;
+    this->ssthresh = 32;
     this->cwnd = MSS;
 
     cout << "Server socket created successfully..." << endl;
@@ -171,7 +171,7 @@ void Client::lgetOpReponse()
                 // 没有相应文件
                 cout << "No such a file - " << file << endl;
                 UDP_PACK confirm = pack;
-                confirm.ack = pack.seq + 1;
+                confirm.ack = -1;
                 confirm.seq = sendSeq;
                 confirm.FIN = true;
                 confirm.rwnd = RWND_MAX_SIZE - win.size();
@@ -249,13 +249,12 @@ void Client::lsendOpResponse()
 
             if (pack.FIN)
             {
-                cout << "Upload file: " << fileName << " successfully" << endl;
+                cout << "\nUpload file: " << fileName << " successfully" << endl;
                 closeConnect();
                 exit(0);
             }
 
             // 更新滑动窗口
-            cout << "up : " << pool.size() << endl;
             int size = pool.size();
             for(int i = 0; i < pool.size(); ++i) 
             {
@@ -269,12 +268,11 @@ void Client::lsendOpResponse()
                 else
                     pool[i].ack = pack.seq + 1;
             }
-            cout << "down : " << pool.size() << endl;
 
-            while(pool.size() > pack.rwnd) {
-                // 缩减窗口
-                pool.pop_back();
-            }
+            // while(pool.size() > pack.rwnd) {
+            //     // 缩减窗口
+            //     pool.pop_back();
+            // }
 
             // 打开文件
             ifstream readFile(file.c_str(), ios::in | ios::binary); //二进制读方式打开
@@ -293,7 +291,7 @@ void Client::lsendOpResponse()
                 {
                     newPack.ack = pool[i - 1].ack;
                     newPack.seq = pool[i - 1].seq + 1;
-                    newPack.dataLength = cwnd;
+                    newPack.dataLength = DATA_SIZE;
                     try
                     {
                         // 读取文件
@@ -320,7 +318,7 @@ void Client::lsendOpResponse()
                 {
                     newPack.ack = pack.seq + 1;
                     newPack.seq = pack.ack;
-                    newPack.dataLength = cwnd;
+                    newPack.dataLength = DATA_SIZE;
                     try
                     {
                         // 读取文件
@@ -360,13 +358,12 @@ void Client::reTransfer()
         // 3s重传
         if (((now - timer) * 1.0 / CLOCKS_PER_SEC) >= 5.0)
         {
-            cout << "timeout!" << " " << pool.size() << endl;
             // 重发已发送未被确认的数据包
             for (int i = 0; i < pool.size(); ++i)
             {
                 sendto(cltSocket, (char *)&pool[i], sizeof(pool[i]), 0, (sockaddr *)&serAddr, addrLen);
-                cout << "RE_send: ack: " << pool[i].ack << " seq: " << pool[i].seq << " "
-                     << "FIN: " << pool[i].FIN << " size: " << pool[i].dataLength << " rwnd: " << pool[i].rwnd << endl;
+                // cout << "RE_send: ack: " << pool[i].ack << " seq: " << pool[i].seq << " "
+                //      << "FIN: " << pool[i].FIN << " size: " << pool[i].dataLength << " rwnd: " << pool[i].rwnd << endl;
             }
             timer = clock();
         }

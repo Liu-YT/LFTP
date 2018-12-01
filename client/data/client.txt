@@ -1,3 +1,5 @@
+###
+###
 #include "client.h"
 
 // 互斥锁
@@ -79,74 +81,4 @@ void Client::lsend()
     if (sendto(cltSocket, (char *)&pack, sizeof(pack), 0, (sockaddr *)&serAddr, addrLen) < 0)
     {
         cout << "Send File Name: " << file << " Failed" << endl;
-        closeConnect();
-        exit(1);
-    }
-
-    // 创建处理线程
-    thread sendHandle(&Client::lsendOpResponse, this);
-
-    // 定时重发
-    thread timerHandle(&Client::reTransfer, this);
-
-    while(true) {
-        if (recvfrom(cltSocket, (char *)&pack, sizeof(pack), 0, (sockaddr *)&serAddr, &addrLen) > 0)
-        {
-            WaitForSingleObject(hMutex, INFINITE);
-            win.push(pack);
-            ReleaseMutex(hMutex);
-        }
-    }
-    closeConnect();
-}
-
-void Client::lget()
-{
-    /*
-    *   file 文件名，不含路径 
-    */
-    UDP_PACK pack;
-    string str = "lget" + file;
-    pack.infoLength = str.size();
-    for (int i = 0; i < str.size(); ++i)
-        pack.info[i] = str[i];
-    pack.info[str.size()] = '\0';
-    pack.rwnd = RWND_MAX_SIZE - win.size();
-
-    // 发送文件名 
-    if (sendto(cltSocket, (char *)&pack, sizeof(pack), 0, (sockaddr *)&serAddr, addrLen) < 0)
-    {
-        cout << "Send File Name: " << file << " Failed" << endl;
-        closeConnect();
-        exit(1);
-    }
-
-    /* 打开文件，准备写入 */
-    string filePath = "../data/" + file;
-    // cout << filePath << endl;
-    ofstream writerFile(filePath.c_str(), ios::out | ios::binary);
-    if (NULL == writerFile)
-    {
-        cout << "File: " << filePath << " Can Not Open To Write" << endl;
-        closeConnect();
-        exit(2);
-    }
-    writerFile.close();
-
-    // 创建处理线程
-    thread getHandler(&Client::lgetOpReponse, this);
-    
-    while (true)
-    {
-        if (recvfrom(cltSocket, (char *)&pack, sizeof(pack), 0, (sockaddr *)&serAddr, &addrLen) > 0)
-        {
-            if(win.size() < RWND_MAX_SIZE) 
-            {
-                WaitForSingleObject(hMutex, INFINITE);
-                win.push(pack);
-                ReleaseMutex(hMutex);
-            }
-        }
-    }
-    closeConnect();
-}
+        closeConnec

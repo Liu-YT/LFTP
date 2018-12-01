@@ -16,7 +16,10 @@ using namespace std;
 using std::thread;
 
 // 流量控制
-#define RWND_MAX_SIZE 20
+#define RWND_MAX_SIZE 1
+
+// 每个数据包的存储的数据长度
+#define DATA_SIZE 2048
 
 #pragma comment(lib, "ws2_32.lib")
 
