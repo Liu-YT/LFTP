@@ -3,6 +3,8 @@
 // 互斥锁
 HANDLE hMutex = CreateMutex(NULL, FALSE, NULL);
 
+int sendSeq = 0;
+
 Server::Server(string _dir, int _serPort)
 {
 
@@ -83,6 +85,9 @@ void Server::waitForClient()
                     WaitForSingleObject(hMutex, INFINITE);
                     recPacks.push(rec);
                     address.push(cltAddr);
+                    if(rwnd.find(cltAddr.sin_addr.S_un.S_addr) == rwnd.end())
+                        rwnd[cltAddr.sin_addr.S_un.S_addr] = 0;
+                    rwnd[cltAddr.sin_addr.S_un.S_addr]++;
                     ipToAddr[cltAddr.sin_addr.S_un.S_addr] = cltAddr;
                     ReleaseMutex(hMutex);
                 }
@@ -103,6 +108,71 @@ void Server::waitForClient()
 void Server::dealSend(string fileName, UDP_PACK pack, SOCKADDR_IN addr)
 {
     string filePath = dataDir + fileName;
+
+    // 第一次连接
+    // 检查文件是否存在
+    if (_access(filePath.c_str(), 0) != -1 && pack.ack == 0) {
+        // 文件已经存在
+        UDP_PACK confirm = pack;
+        confirm.ack = pack.seq + 1;
+        confirm.seq = -1;
+        confirm.FIN = true;
+        sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&addr, addrLen);
+        return;
+    }
+    else if (pack.ack == 0)
+    {
+        waitAck[addr.sin_addr.S_un.S_addr] = 1;
+        UDP_PACK confirm = pack;
+        confirm.ack = pack.seq + 1;
+        confirm.seq = sendSeq;
+        confirm.rwnd = RWND_MAX_SIZE;
+        ++sendSeq;
+        confirm.FIN = false;
+        sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&addr, addrLen);
+        return;
+    }
+
+    int& ack = waitAck[addr.sin_addr.S_un.S_addr];
+
+    cout << "pack-seq: " << pack.seq << " ack: " << ack << endl;
+
+    if (pack.seq == ack)
+    {
+        ack++;
+        // 写入信息
+        ofstream writerFile(filePath.c_str(), ios::app | ios::binary);
+        writerFile.write((char *)&pack.data, pack.dataLength);
+        writerFile.close();
+
+        // 发送确认包
+        UDP_PACK confirm = pack;
+        confirm.ack = pack.seq + 1;
+        confirm.seq = sendSeq++;
+        confirm.rwnd = ((RWND_MAX_SIZE - rwnd[addr.sin_addr.S_un.S_addr] <= 0) ? 1 : RWND_MAX_SIZE - rwnd[addr.sin_addr.S_un.S_addr]);
+        sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&addr, addrLen);
+        if (pack.FIN)
+        {
+            /* 结束 */
+            // 清除相应配置信息
+            map<u_long, int>::iterator a = rwnd.find(addr.sin_addr.S_un.S_addr);
+            rwnd.erase(a);
+
+            map<u_long, int>::iterator b = waitAck.find(addr.sin_addr.S_un.S_addr);
+            waitAck.erase(b);
+        }
+    }
+    else
+    {
+        // 接收到重复的包处理
+
+        UDP_PACK confirm = pack;
+        confirm.ack = ack;
+        confirm.seq = sendSeq++;
+        confirm.rwnd = ((RWND_MAX_SIZE - rwnd[addr.sin_addr.S_un.S_addr] <= 0) ? 1 : RWND_MAX_SIZE - rwnd[addr.sin_addr.S_un.S_addr]);
+        // 如果接收的seq和期待的不相同,重新发送
+        sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&addr, addrLen);
+    }
 }
 
 // Todo: 发送客户端请求的文件
@@ -134,22 +204,17 @@ void Server::dealGet(string fileName, UDP_PACK pack, SOCKADDR_IN addr)
 
     // 滑动窗口
     vector<UDP_PACK> &win = pool[addr.sin_addr.S_un.S_addr];
-    while (!win.empty())
+    for(int i = 0; i < win.size(); ++i)
     {
-        UDP_PACK isAckPack = win[0];
-        if (isAckPack.seq < pack.ack) {
+        if (win[i].seq < pack.ack)
+        {
             win.erase(win.begin());
+            --i;
             // 更新超时
             timer[addr.sin_addr.S_un.S_addr] = clock();
         }
         else
-            break;
-    }
-
-    // 更新存储的数据包 ack
-    for (int i = 0; i < win.size(); ++i)
-    {
-        win[i].ack = pack.seq + 1;
+            win[i].ack = pack.seq + 1;
     }
 
     if (win.size() == 0)
@@ -196,26 +261,21 @@ void Server::dealGet(string fileName, UDP_PACK pack, SOCKADDR_IN addr)
             {
                 // 读取文件
                 readFile.read((char *)&newPack.data, newPack.dataLength);
+                newPack.dataLength = readFile.gcount();
                 if (readFile.peek() == EOF)
-                {
                     newPack.FIN = true;
-                    newPack.dataLength = readFile.gcount();
-                    readFile.close();
-                }
                 win.push_back(newPack);
-                timer[addr.sin_addr.S_un.S_addr] = clock();
                 sendto(serSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&addr, addrLen);
+                timer[addr.sin_addr.S_un.S_addr] = clock();
             }
             catch (exception &err)
             {
                 newPack.FIN = true;
                 sendto(serSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&addr, addrLen);
-                newPack.dataLength = readFile.gcount();
                 readFile.close();
                 break;
             }
         }
-        Sleep(1);
     }
     readFile.close();
 }
@@ -242,12 +302,10 @@ void Server::deal()
 
             if (op == "send")
             {
-                // cout << "lsend" << endl;
                 dealSend(fileName, proPack, addr);
             }
             else if (op == "lget")
             {
-                // cout << "lget" << endl;
                 dealGet(fileName, proPack, addr);
             }
             else
@@ -268,8 +326,8 @@ void Server::reTransfer()
             u_long ipAddr = it->first;
             clock_t start = it->second;
             clock_t now = clock();
-            // 5s重传
-            if (((now - start) * 1.0 / CLOCKS_PER_SEC) >= 5.0)
+            // 3s重传
+            if (((now - start) * 1.0 / CLOCKS_PER_SEC) >= 3.0)
             {
                 // 获取已发送未被确认的数据包
                 vector<UDP_PACK> &win = pool[ipAddr];

@@ -15,6 +15,7 @@
 using namespace std;
 using std::thread;
 
+// 流量控制
 #define RWND_MAX_SIZE 20
 
 #pragma comment(lib, "ws2_32.lib")
@@ -29,7 +30,12 @@ class Client
     void lsend();
     void lget();
     void lgetOpReponse();
-    queue<UDP_PACK> win; // 接收窗口（流量控制）
+    void lsendOpResponse();
+    void reTransfer();
+    queue<UDP_PACK> win;   // 接收窗口（流量控制）
+    vector<UDP_PACK> pool;  // 发送窗口
+    clock_t timer;          // 定时器
+
 
   private:
     string file;      // 文件
@@ -40,7 +46,10 @@ class Client
     SOCKET cltSocket;
     SOCKADDR_IN serAddr;
     int addrLen;
-    int rwnd;       // 接收窗口（流量控制）
+    int cwnd;       // 拥塞窗口
+    int rwnd;       // 接收窗口大小（流量控制）
+    int MSS;
+    int ssthresh;
 };
 
 #endif

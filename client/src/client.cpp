@@ -28,6 +28,12 @@ Client::Client(string _ip, string _file, int _port)
     this->serAddr.sin_addr.S_un.S_addr = inet_addr(this->serverIp.c_str());
 
     this->addrLen = sizeof(serAddr);
+
+    // 初始化拥塞窗口信息
+    this->MSS = 1024;
+    this->ssthresh = 4096;
+    this->cwnd = MSS;
+
     cout << "Server socket created successfully..." << endl;
 }
 
@@ -77,9 +83,21 @@ void Client::lsend()
         exit(1);
     }
 
-    while(true) {
+    // 创建处理线程
+    thread sendHandle(&Client::lsendOpResponse, this);
 
+    // 定时重发
+    thread timerHandle(&Client::reTransfer, this);
+
+    while(true) {
+        if (recvfrom(cltSocket, (char *)&pack, sizeof(pack), 0, (sockaddr *)&serAddr, &addrLen) > 0)
+        {
+            WaitForSingleObject(hMutex, INFINITE);
+            win.push(pack);
+            ReleaseMutex(hMutex);
+        }
     }
+    closeConnect();
 }
 
 void Client::lget()
@@ -115,7 +133,8 @@ void Client::lget()
     }
     writerFile.close();
 
-    thread getHandle(&Client::lgetOpReponse, this);
+    // 创建处理线程
+    thread getHandler(&Client::lgetOpReponse, this);
     
     while (true)
     {
@@ -140,13 +159,13 @@ void Client::lgetOpReponse()
     int ack = 0;
     int sendSeq = 0;
     while(true) {
-        while (!win.empty()) 
+        if (!win.empty()) 
         {
             WaitForSingleObject(hMutex, INFINITE);
             UDP_PACK pack = win.front();
             win.pop();
             ReleaseMutex(hMutex);
-            cout << "ack: " << pack.ack << " seq: " << pack.seq << " " << "FIN: " << pack.FIN << " " << pack.dataLength << endl;
+            cout << "receive: ack: " << pack.ack << " seq: " << pack.seq << " " << "FIN: " << pack.FIN << " size:" << pack.dataLength << endl;
             if (pack.FIN && pack.seq == -1)
             {
                 // 没有相应文件
@@ -185,7 +204,8 @@ void Client::lgetOpReponse()
                     closeConnect();
                     exit(0);
                 }
-                cout << "send: ack " << confirm.ack << endl;
+                cout << "send ack: " << confirm.ack << " seq: " << confirm.seq << " "
+                     << "FIN: " << confirm.FIN << endl;
             }
             else
             {
@@ -196,8 +216,162 @@ void Client::lgetOpReponse()
                 confirm.rwnd = RWND_MAX_SIZE - win.size();
                 // 如果接收的seq和期待的不相同,重新发送
                 sendto(cltSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&serAddr, addrLen);
-                cout << "send: ack " << confirm.ack << endl;
+                cout << "send ack: " << confirm.ack << " seq: " << confirm.seq << " "
+                     << "FIN: " << confirm.FIN << endl;
             }
         }       
+    }
+}
+
+void Client::lsendOpResponse()
+{
+    /*
+    *   lsend
+    *   file     文件名，包含具体路径 
+    *   fileName 文件名，不含路径
+    */
+    string fileName = file.substr(file.find_last_of('/') + 1);
+
+    // 打开文件
+    ifstream readFile(file.c_str(), ios::in | ios::binary); //二进制读方式打开
+
+    while(true) {
+        if(!win.empty())
+        {
+            WaitForSingleObject(hMutex, INFINITE);
+            UDP_PACK pack = win.front();
+            win.pop();
+            ReleaseMutex(hMutex);
+            cout << "receive: ack: " << pack.ack << " seq: " << pack.seq << " " << "FIN: " << pack.FIN << " rwnd: " << pack.rwnd << endl;
+
+            if(pack.seq == -1 && pack.FIN) {
+                closeConnect();
+                cout << "The file: " << fileName << " is existed in server" << endl;
+                exit(0);
+            }
+
+            if (pack.FIN)
+            {
+                cout << "Upload file: " << fileName << " successfully" << endl;
+                closeConnect();
+                exit(0);
+            }
+
+            // 更新滑动窗口
+            cout << "up : " << pool.size() << endl;
+            int size = pool.size();
+            for(int i = 0; i < pool.size(); ++i) 
+            {
+                if (pool[i].seq < pack.ack)
+                {
+                    pool.erase(pool.begin());
+                    i--;
+                    // 重新计时
+                    timer = clock();
+                }
+                else
+                    pool[i].ack = pack.seq + 1;
+            }
+            cout << "down : " << pool.size() << endl;
+
+            while(pool.size() > pack.rwnd) {
+                // 缩减窗口
+                pool.pop_back();
+            }
+
+            if (pool.size() == 0)
+                readFile.seekg(pack.totalByte, ios::beg);
+            else
+                readFile.seekg(pool[pool.size() - 1].totalByte, ios::beg);
+
+            // 窗口前移
+            cerr << "  pool size: " << pool.size() << " rwnd:" << pack.rwnd << " end: " << (readFile.peek() == EOF) << endl;
+            for (int i = pool.size(); i < pack.rwnd; ++i)
+            {
+                if(readFile.peek() == EOF)  break;
+                UDP_PACK newPack = pack;
+                if (i >= 1)
+                {
+                    newPack.ack = pool[i - 1].ack;
+                    newPack.seq = pool[i - 1].seq + 1;
+                    newPack.dataLength = cwnd;
+                    try
+                    {
+                        // 读取文件
+                        readFile.read((char *)&newPack.data, newPack.dataLength);
+                        newPack.dataLength = readFile.gcount();
+                        if (readFile.peek() == EOF) {
+                            newPack.FIN = true;
+                        }
+                        newPack.totalByte = pool[i - 1].totalByte + newPack.dataLength;
+                        pool.push_back(newPack);
+                        sendto(cltSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&serAddr, addrLen);
+                        cout << "send: ack: " << newPack.ack << " seq: " << newPack.seq << " "  << "FIN: " << newPack.FIN << " size: " << newPack.dataLength << " rwnd: " << newPack.rwnd << endl;
+                    }
+                    catch (exception &err)
+                    {
+                        newPack.FIN = true;
+                        sendto(cltSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&serAddr, addrLen);
+                        cout << "send: ack: " << newPack.ack << " seq: " << newPack.seq << " " << "FIN: " << newPack.FIN << " size: " << newPack.dataLength << " rwnd: " << newPack.rwnd << endl;
+                        readFile.close();
+                        break;
+                    }
+                }
+                else
+                {
+                    newPack.ack = pack.seq + 1;
+                    newPack.seq = pack.ack;
+                    newPack.dataLength = cwnd;
+                    try
+                    {
+                        // 读取文件
+                        readFile.read((char *)&newPack.data, newPack.dataLength);
+                        newPack.dataLength = readFile.gcount();
+                        if (readFile.peek() == EOF)
+                        {
+                            newPack.FIN = true;
+                        }
+                        newPack.totalByte = pack.totalByte + newPack.dataLength;
+                        pool.push_back(newPack);
+                        sendto(cltSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&serAddr, addrLen);
+                        timer = clock();
+                        cout << "send: ack: " << newPack.ack << " seq: " << newPack.seq << " " << "FIN: " << newPack.FIN << " size: " << newPack.dataLength << " rwnd: " << newPack.rwnd << endl;
+                    }
+                    catch (exception &err)
+                    {
+                        newPack.FIN = true;
+                        sendto(cltSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&serAddr, addrLen);
+                        cout << "send: ack: " << newPack.ack << " seq: " << newPack.seq << " " << "FIN: " << newPack.FIN << " size: " << newPack.dataLength << " rwnd: " << newPack.rwnd << endl;
+                        newPack.dataLength = readFile.gcount();
+                        readFile.close();
+                        break;
+                    }
+                }
+            }
+                cerr << "!  pool size: " << pool.size() << " rwnd:" << pack.rwnd << endl;
+            readFile.close();
+        }
+    }
+    readFile.close();
+}
+
+void Client::reTransfer()
+{
+    while (true)
+    {
+        clock_t now = clock();
+        // 3s重传
+        if (((now - timer) * 1.0 / CLOCKS_PER_SEC) >= 5.0)
+        {
+            cout << "timeout!" << " " << pool.size() << endl;
+            // 重发已发送未被确认的数据包
+            for (int i = 0; i < pool.size(); ++i)
+            {
+                sendto(cltSocket, (char *)&pool[i], sizeof(pool[i]), 0, (sockaddr *)&serAddr, addrLen);
+                cout << "RE_send: ack: " << pool[i].ack << " seq: " << pool[i].seq << " "
+                     << "FIN: " << pool[i].FIN << " size: " << pool[i].dataLength << " rwnd: " << pool[i].rwnd << endl;
+            }
+            timer = clock();
+        }
     }
 }

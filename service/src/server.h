@@ -12,12 +12,16 @@
 #include <vector>
 #include <queue>
 #include <map>
+#include <io.h>
 #include <cstring>
 #include <thread>
 #include "package.h"
 
 using namespace std;
 using std::thread;
+
+// 流量控制
+#define RWND_MAX_SIZE 10
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -57,7 +61,13 @@ class Server
     // 计时器，超时重传
     map <u_long, clock_t> timer;
 
-private : 
+    // 记录各个连接确认号ack
+    map<u_long, int> waitAck;
+
+    // 对每个连接有一个流量控制窗口， 接收窗口（流量控制）
+    map<u_long, int> rwnd; 
+
+  private: 
     string dataDir; // 文件地址
     int serPort;    // 服务端口
     WSADATA wsaData;
@@ -70,7 +80,6 @@ private :
     int MSS;      // 拥塞窗口大小
     int ssthresh; // 慢启动阈值
     int cwnd;     // 拥塞窗口
-    int rwnd;     // 接收窗口（流量控制）
 };
 
 #endif

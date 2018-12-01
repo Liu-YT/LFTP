@@ -25,6 +25,7 @@ struct UDP_PACK
         seq = 0;
         dataLength = 0;
         FIN = false;
+        totalByte = 0;
     }
 
     UDP_PACK &operator=(const UDP_PACK &pack)
