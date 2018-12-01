@@ -239,6 +239,8 @@ void Server::lGet(u_long ip, string filePath)
                 if(c != ipToAddr.end())
                     ipToAddr.erase(c);
 
+                waitAck[addr.sin_addr.S_un.S_addr] = 0;
+
                 cout << "Close connection with: " << ip << endl;
 
                 return;
@@ -378,6 +380,8 @@ void Server::lSend(u_long ip, string filePath)
                             map<u_long, SOCKADDR_IN>::iterator c = ipToAddr.find(addr.sin_addr.S_un.S_addr);
                             if (c != ipToAddr.end())
                                 ipToAddr.erase(c);
+
+                            waitAck[addr.sin_addr.S_un.S_addr] = 0;
 
                             cout << "Close connection with: " << ip << endl;
 
