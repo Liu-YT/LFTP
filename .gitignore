@@ -1,4 +1,14 @@
-service/data/
-client/data/
+# server/data
+service/data/*.mp3
+service/data/*.flac
+server/data/*.pdf
+
+# client/data
+client/data/*.mp3
+client/data/*.flac
+client/data/*.pdf
+
+# exe
 service/src/*.exe
 client/src/*.exe
+

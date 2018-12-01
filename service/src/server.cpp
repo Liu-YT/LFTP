@@ -147,7 +147,7 @@ void Server::dealSend(string fileName, UDP_PACK pack, SOCKADDR_IN addr)
         UDP_PACK confirm = pack;
         confirm.ack = pack.seq + 1;
         confirm.seq = sendSeq++;
-        confirm.rwnd = ((RWND_MAX_SIZE - rwnd[addr.sin_addr.S_un.S_addr] <= 0) ? 1 : RWND_MAX_SIZE - rwnd[addr.sin_addr.S_un.S_addr]);
+        confirm.rwnd = ((RWND_MAX_SIZE - rwnd[addr.sin_addr.S_un.S_addr]  + 1<= 0) ? 1 : RWND_MAX_SIZE - rwnd[addr.sin_addr.S_un.S_addr] + 1);
         sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&addr, addrLen);
         if (pack.FIN)
         {
