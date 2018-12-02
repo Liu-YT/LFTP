@@ -222,6 +222,7 @@ void Client::lgetOpReponse()
                 ++sendSeq;
                 UDP_PACK confirm = pack;
                 confirm.ack = ack;
+                confirm.FIN = false;
                 confirm.seq = sendSeq;
                 confirm.rwnd = RWND_MAX_SIZE - win.size();
                 // 如果接收的seq和期待的不相同,重新发送
@@ -347,6 +348,7 @@ void Client::lsendOpResponse()
                         newPack.FIN = true;
                         sendto(cltSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&serAddr, addrLen);
                         cout << "send: ack: " << newPack.ack << " seq: " << newPack.seq << " " << "FIN: " << newPack.FIN << " size: " << newPack.dataLength << " rwnd: " << newPack.rwnd << endl;
+                        cout << "Have a error" << endl;
                         readFile.close();
                         break;
                     }
@@ -377,7 +379,7 @@ void Client::lsendOpResponse()
                         newPack.FIN = true;
                         sendto(cltSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&serAddr, addrLen);
                         cout << "send: ack: " << newPack.ack << " seq: " << newPack.seq << " " << "FIN: " << newPack.FIN << " size: " << newPack.dataLength << " rwnd: " << newPack.rwnd << endl;
-                        newPack.dataLength = readFile.gcount();
+                        cout << "Have a error" << endl;
                         readFile.close();
                         break;
                     }

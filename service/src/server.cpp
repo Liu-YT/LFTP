@@ -322,7 +322,7 @@ void Server::lGet(u_long ip, string filePath)
                     catch (exception &err)
                     {
                         readFile.close();
-                        return;
+                        break;
                     }
                 }
                 else
@@ -346,7 +346,7 @@ void Server::lGet(u_long ip, string filePath)
                     catch (exception &err)
                     {
                         readFile.close();
-                        return;
+                        break;
                     }
                 }
                 if (readFile.peek() == EOF)
@@ -356,7 +356,6 @@ void Server::lGet(u_long ip, string filePath)
         }
     }
 }
-
 
 /*
 *   Todo: 接收客户端上传的文件.
@@ -369,6 +368,7 @@ void Server::lSend(u_long ip, string filePath)
 {
     queue<UDP_PACK>& packs = pool[ip];
     SOCKADDR_IN addr = ipToAddr[ip];
+    waitAck[addr.sin_addr.S_un.S_addr] = 1;
     int &ack = waitAck[addr.sin_addr.S_un.S_addr];
     // seq
     int sendSeq = 1;
