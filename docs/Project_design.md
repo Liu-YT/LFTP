@@ -22,19 +22,19 @@ LFTP，支持两台电脑之间通过互联网传输文件
 
 ### 数据包
 本程序的数据包基于UDP数据包，在UDP数据包传输数据部分封装了自己的数据包
-<dir style="text-align: center">
+<dir>
     <table>
         <caption>UDP数据报文段首部</caption>
         <tr>
-            <th>源端口号</th>
-            <th>目的端口号</th>
+            <th align="center">源端口号</th>
+            <th align="center">目的端口号</th>
         </tr>
         <tr>
-            <td>首部长度</td>
-            <td>校验和</td>
+            <td align="center">首部长度</td>
+            <td align="center">校验和</td>
         </tr>
         <tr>
-            <td colspan="2">数据</td>
+            <td colspan="2" align="center">数据</td>
         </tr>
     </table>
 </dir>
@@ -43,23 +43,23 @@ UDP_PACK数据包放在UDP数据部分进行传输
     <table>
         <caption>UDP_PACK数据报文</caption>
         <tr>
-            <th colspan="2">seq - 序列号</th>
-            <th colspan="1">ack - 确认号</th>
+            <th colspan="2" align="center">seq - 序列号</th>
+            <th colspan="1" align="center">ack - 确认号</th>
         </tr>
         <tr>
-            <td colspan="2">rwnd - 接收方的接收窗口空闲大小</td>
-            <td>FIN - 标志位</td>
+            <td colspan="2" align="center">rwnd - 接收方的接收窗口空闲大小</td>
+            <td align="center">FIN - 标志位</td>
         </tr>
         <tr>
-            <td>infoLength - info的长度</td>
-            <td>dataLength - data的长度</td>
-            <td>totalByte - 发送方发送字节数目</td>
+            <td align="center">infoLength - info的长度</td>
+            <td align="center">dataLength - data的长度</td>
+            <td align="center">totalByte - 发送方发送字节数目</td>
         </tr>
         <tr>
-            <td colspan="3">info -信息</td>
+            <td colspan="3" align="center">info -信息</td>
         </tr>
         <tr>
-            <td colspan="3">data - 数据</td>
+            <td colspan="3" align="center">data - 数据</td>
         </tr>
     </table>
 </dir>
