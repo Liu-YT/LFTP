@@ -1,8 +1,8 @@
-# # server/data
-# service/data/
+# server/data
+service/data/
 
-# # client/data
-# client/data/
+# client/data
+client/data/
 
 # exe
 service/src/*.exe

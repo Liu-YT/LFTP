@@ -321,10 +321,8 @@ void Server::lGet(u_long ip, string filePath)
                     }
                     catch (exception &err)
                     {
-                        newPack.FIN = true;
-                        sendto(serSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&addr, addrLen);
                         readFile.close();
-                        exit(1);
+                        return;
                     }
                 }
                 else
@@ -347,10 +345,8 @@ void Server::lGet(u_long ip, string filePath)
                     }
                     catch (exception &err)
                     {
-                        newPack.FIN = true;
-                        sendto(serSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&addr, addrLen);
                         readFile.close();
-                        exit(2);
+                        return;
                     }
                 }
                 if (readFile.peek() == EOF)
@@ -403,7 +399,6 @@ void Server::lSend(u_long ip, string filePath)
                         confirm.seq = sendSeq++;
                         confirm.rwnd = ((RWND_MAX_SIZE - packs.size() <= 0) ? 1 : RWND_MAX_SIZE - packs.size());
                         sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&addr, addrLen);
-                        cout << "0 send: " << confirm.ack << endl;
                         if (pack.FIN)
                         {
                             /* 结束 */
@@ -434,11 +429,11 @@ void Server::lSend(u_long ip, string filePath)
                     // 接收到重复的包处理
                     UDP_PACK confirm = pack;
                     confirm.ack = ack;
+                    confirm.FIN = false;
                     confirm.seq = sendSeq++;
                     confirm.rwnd = ((RWND_MAX_SIZE - packs.size() <= 0) ? 1 : RWND_MAX_SIZE - packs.size());
                     // 如果接收的seq和期待的不相同,重新发送
                     sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&addr, addrLen);
-                    cout << "1 send: " << confirm.ack << endl;
                 }
             }
             
