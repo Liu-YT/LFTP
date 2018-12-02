@@ -22,8 +22,8 @@ LFTP，支持两台电脑之间通过互联网传输文件
 
 ### 数据包
 本程序的数据包基于UDP数据包，在UDP数据包传输数据部分封装了自己的数据包
-<dir>
-    <table style="text-align: center">
+<dir style="text-align: center">
+    <table>
         <caption>UDP数据报文段首部</caption>
         <tr>
             <th>源端口号</th>
@@ -39,8 +39,8 @@ LFTP，支持两台电脑之间通过互联网传输文件
     </table>
 </dir>
 UDP_PACK数据包放在UDP数据部分进行传输
-<dir>
-    <table style="text-align: center">
+<dir style="text-align: center">
+    <table>
         <caption>UDP_PACK数据报文</caption>
         <tr>
             <th colspan="2">seq - 序列号</th>
@@ -69,7 +69,7 @@ UDP_PACK数据包放在UDP数据部分进行传输
 
 * GBN
 <dir>
-    <table style="text-align: center">
+    <table>
         <tr>
             <th>Sender</th>
             <th><img src="./images/GBN_sender.png" ></th>
