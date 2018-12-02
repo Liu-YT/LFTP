@@ -28,6 +28,7 @@
         ```
 
 ## Note
+* **Each client can only support one operation(lsend or lget) at a time.**
 * The default port used by the server is `8888`, the port can be modified by the default port of the `Server` constructor
     * ` Server(string _dir = "../data/", int port = 8888)`
 * The default receive transfer file is stored in the `../data/` directory，both of the server and client
