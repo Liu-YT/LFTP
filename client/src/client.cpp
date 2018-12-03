@@ -222,7 +222,7 @@ void Client::lgetOpReponse()
                     exit(0);
                 }
             }
-            else
+            else if (pack.seq > ack)
             {
                 ++sendSeq;
                 UDP_PACK confirm = pack;

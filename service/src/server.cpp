@@ -330,7 +330,7 @@ void Server::lGet(u_long ip, string filePath)
                             newPack.FIN = true;
                         buffer.push(newPack);
                         sendto(serSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&addr, addrLen);
-                        cerr << "lGet: ack: " << newPack.ack << " seq: " << newPack.seq << " fin: " << newPack.FIN << endl;
+                        // cerr << "lGet: ack: " << newPack.ack << " seq: " << newPack.seq << " fin: " << newPack.FIN << endl;
 
                         if(readFile.peek() == EOF)  break;
                     }
@@ -355,7 +355,7 @@ void Server::lGet(u_long ip, string filePath)
                             newPack.FIN = true;
                         buffer.push(newPack);
                         sendto(serSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&addr, addrLen);
-                        cerr << "lGet win 0: ack: " << newPack.ack << " seq: " << newPack.seq << " fin: " << newPack.FIN << endl;
+                        // cerr << "lGet win 0: ack: " << newPack.ack << " seq: " << newPack.seq << " fin: " << newPack.FIN << endl;
                         timer[addr.sin_addr.S_un.S_addr] = clock();
                         if(readFile.peek() == EOF)  break;
                     }
@@ -421,7 +421,7 @@ void Server::lSend(u_long ip, string filePath)
                         confirm.seq = sendSeq++;
                         confirm.rwnd = ((RWND_MAX_SIZE - packs.size() <= 0) ? 1 : RWND_MAX_SIZE - packs.size());
                         sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&addr, addrLen);
-                        cerr << "lsend: ack: " << confirm.ack << " seq: " << confirm.seq << " fin: " << confirm.FIN << endl;
+                        // cerr << "lsend: ack: " << confirm.ack << " seq: " << confirm.seq << " fin: " << confirm.FIN << endl;
 
                         if (pack.FIN)
                         {
@@ -448,7 +448,7 @@ void Server::lSend(u_long ip, string filePath)
                         }
                     }
                 }
-                else
+                else if(pack.seq > ack)
                 {
                     // 接收到重复的包处理
                     UDP_PACK confirm = pack;
@@ -492,7 +492,7 @@ void Server::reTransfer()
                 SOCKADDR_IN cltAddr = ipToAddr[ipAddr];
                 // 重传
                 sendto(serSocket, (char *)&buffer.front(), sizeof(buffer.front()), 0, (sockaddr *)&cltAddr, addrLen);
-                cerr << "ReSend: ack: " << buffer.front().ack << " seq: " << buffer.front().seq << " fin: " << buffer.front().FIN << endl;
+                // cerr << "ReSend: ack: " << buffer.front().ack << " seq: " << buffer.front().seq << " fin: " << buffer.front().FIN << endl;
                 it->second = clock();
             }
             it++;
