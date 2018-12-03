@@ -75,6 +75,7 @@ void Client::lsend()
     for (int i = 0; i < str.size(); ++i)
         pack.info[i] = str[i];
     pack.info[str.size()] = '\0';
+    pack.time = clock();
 
     // 发送文件名
     if (sendto(cltSocket, (char *)&pack, sizeof(pack), 0, (sockaddr *)&serAddr, addrLen) < 0)
@@ -260,7 +261,11 @@ void Client::lsendOpResponse()
             if(op != "send")    continue;
             else    win.pop();
             ReleaseMutex(hMutex);
-            cout << "receive: ack: " << pack.ack << " seq: " << pack.seq << " " << "FIN: " << pack.FIN << " rwnd: " << pack.rwnd << endl;
+
+            clock_t end = clock();
+            estimatedRTT = (end - pack.time) * 1.0 / CLOCKS_PER_SEC * 0.125 + estimatedRTT * 0.875;
+
+            cout << "receive: ack: " << pack.ack << " seq: " << pack.seq << " FIN: " << pack.FIN << " rwnd: " << pack.rwnd << endl;
 
             if(pack.seq == -1 && pack.FIN) {
                 closeConnect();
@@ -408,7 +413,7 @@ void Client::reTransfer()
         clock_t now = clock();
         
         // 3s重传
-        if (((now - timer) * 1.0 / CLOCKS_PER_SEC) >= 5.0)
+        if (((now - timer) * 1.0 / CLOCKS_PER_SEC) >= estimatedRTT)
         {
             // ssthresh变成之前的cwnd的一半
             ssthresh = cwnd / 2;
@@ -420,8 +425,8 @@ void Client::reTransfer()
             for (int i = 0; i < pool.size(); ++i)
             {
                 sendto(cltSocket, (char *)&pool[i], sizeof(pool[i]), 0, (sockaddr *)&serAddr, addrLen);
-                // cout << "RE_send: ack: " << pool[i].ack << " seq: " << pool[i].seq << " "
-                //      << "FIN: " << pool[i].FIN << " size: " << pool[i].dataLength << " rwnd: " << pool[i].rwnd << endl;
+                cout << "RE_send: ack: " << pool[i].ack << " seq: " << pool[i].seq << " "
+                     << "FIN: " << pool[i].FIN << " size: " << pool[i].dataLength << " rwnd: " << pool[i].rwnd << endl;
             }
             timer = clock();
         }

@@ -18,6 +18,7 @@ struct UDP_PACK
     char info[INFO_MAX_SIZE]; // 操作 + 文件名
     int infoLength;           // 信息长度
     int totalByte;            // 记录发送总字节
+    clock_t time;             // 发送时间
 
     UDP_PACK()
     {

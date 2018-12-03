@@ -53,9 +53,11 @@ class Client
 
     clock_t timer;          // 定时器
 
-    int ssthresh;
+    int ssthresh;    // 拥塞阈值
 
     int cwnd;       // 拥塞窗口
+
+    double estimatedRTT = 5.0;   // 初始RTT时间为5s
 
     int errorNum;   // 冗余ack计算
 
