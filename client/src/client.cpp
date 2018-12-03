@@ -171,7 +171,12 @@ void Client::lgetOpReponse()
         {
             WaitForSingleObject(hMutex, INFINITE);
             UDP_PACK pack = win.front();
-            win.pop();
+            string info = string(pack.info);
+            string op = info.substr(0, 4);
+            if (op != "lget")
+                continue;
+            else
+                win.pop();
             ReleaseMutex(hMutex);
             cout << "receive: ack: " << pack.ack << " seq: " << pack.seq << " " << "FIN: " << pack.FIN << endl;
             if (pack.FIN && pack.seq == -1)
@@ -206,6 +211,8 @@ void Client::lgetOpReponse()
                 confirm.seq = sendSeq;
                 confirm.rwnd = RWND_MAX_SIZE - win.size();
                 sendto(cltSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&serAddr, addrLen);
+                cout << "send ack: " << confirm.ack << " seq: " << confirm.seq << " "
+                     << "FIN: " << confirm.FIN << " rwnd: " << confirm.rwnd << endl;
                 if (pack.FIN)
                 {
                     // 结束
@@ -214,8 +221,6 @@ void Client::lgetOpReponse()
                     closeConnect();
                     exit(0);
                 }
-                cout << "send ack: " << confirm.ack << " seq: " << confirm.seq << " "
-                     << "FIN: " << confirm.FIN << endl;
             }
             else
             {
@@ -228,7 +233,7 @@ void Client::lgetOpReponse()
                 // 如果接收的seq和期待的不相同,重新发送
                 sendto(cltSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&serAddr, addrLen);
                 cout << "send ack: " << confirm.ack << " seq: " << confirm.seq << " "
-                     << "FIN: " << confirm.FIN << endl;
+                     << "FIN: " << confirm.FIN << " rwnd: " << confirm.rwnd << endl;
             }
         }       
     }
@@ -250,7 +255,10 @@ void Client::lsendOpResponse()
         {
             WaitForSingleObject(hMutex, INFINITE);
             UDP_PACK pack = win.front();
-            win.pop();
+            string info = string(pack.info);
+            string op = info.substr(0, 4);
+            if(op != "send")    continue;
+            else    win.pop();
             ReleaseMutex(hMutex);
             cout << "receive: ack: " << pack.ack << " seq: " << pack.seq << " " << "FIN: " << pack.FIN << " rwnd: " << pack.rwnd << endl;
 
@@ -371,14 +379,14 @@ void Client::lsendOpResponse()
                         pool.push_back(newPack);
                         sendto(cltSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&serAddr, addrLen);
                         timer = clock();
-                        cout << "send: ack: " << newPack.ack << " seq: " << newPack.seq << " " << "FIN: " << newPack.FIN << " size: " << newPack.dataLength << " rwnd: " << newPack.rwnd << endl;
+                        cout << "send: ack: " << newPack.ack << " seq: " << newPack.seq << " " << "FIN: " << newPack.FIN << " rwnd: " << newPack.rwnd << endl;
                         if(readFile.peek() == EOF)  break;
                     }
                     catch (exception &err)
                     {
                         newPack.FIN = true;
                         sendto(cltSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&serAddr, addrLen);
-                        cout << "send: ack: " << newPack.ack << " seq: " << newPack.seq << " " << "FIN: " << newPack.FIN << " size: " << newPack.dataLength << " rwnd: " << newPack.rwnd << endl;
+                        cout << "send: ack: " << newPack.ack << " seq: " << newPack.seq << " " << "FIN: " << newPack.FIN << " rwnd: " << newPack.rwnd << endl;
                         cout << "Have a error" << endl;
                         readFile.close();
                         break;

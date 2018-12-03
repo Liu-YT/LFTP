@@ -215,7 +215,12 @@ void Server::lGet(u_long ip, string filePath)
         {
             WaitForSingleObject(hMutex, INFINITE);
             UDP_PACK pack = recWin.front();
-            recWin.pop();
+            string info = string(pack.info);
+            string op = info.substr(0, 4);
+            if (op != "lget")
+                continue;
+            else
+                recWin.pop();
             ReleaseMutex(hMutex);
 
             /* 处理确认的信息 */
@@ -224,6 +229,7 @@ void Server::lGet(u_long ip, string filePath)
                 /* 结束 */
 
                 // 清除相应配置信息
+                WaitForSingleObject(hMutex, INFINITE);
                 map<u_long, queue<UDP_PACK>>::iterator a = pool.find(addr.sin_addr.S_un.S_addr);
                 if (a != pool.end())
                     pool.erase(a);
@@ -235,6 +241,11 @@ void Server::lGet(u_long ip, string filePath)
                 map<u_long, SOCKADDR_IN>::iterator c = ipToAddr.find(addr.sin_addr.S_un.S_addr);
                 if(c != ipToAddr.end())
                     ipToAddr.erase(c);
+
+                map<u_long, clock_t>::iterator d = timer.find(addr.sin_addr.S_un.S_addr);
+                if(d != timer.end())
+                    timer.erase(d);
+                ReleaseMutex(hMutex);
 
                 waitAck[addr.sin_addr.S_un.S_addr] = 0;
 
@@ -298,6 +309,8 @@ void Server::lGet(u_long ip, string filePath)
             else
                 readFile.seekg(buffer.back().totalByte, ios::beg);
 
+            if(buffer.size() > 0 && buffer.back().FIN)   continue;;
+
             // 窗口前移
             for (int i = buffer.size(); i < pack.rwnd && i < cwnd[ip]; ++i)
             {
@@ -317,6 +330,8 @@ void Server::lGet(u_long ip, string filePath)
                             newPack.FIN = true;
                         buffer.push(newPack);
                         sendto(serSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&addr, addrLen);
+                        cerr << "lGet: ack: " << newPack.ack << " seq: " << newPack.seq << " fin: " << newPack.FIN << endl;
+
                         if(readFile.peek() == EOF)  break;
                     }
                     catch (exception &err)
@@ -340,6 +355,7 @@ void Server::lGet(u_long ip, string filePath)
                             newPack.FIN = true;
                         buffer.push(newPack);
                         sendto(serSocket, (char *)&newPack, sizeof(newPack), 0, (sockaddr *)&addr, addrLen);
+                        cerr << "lGet win 0: ack: " << newPack.ack << " seq: " << newPack.seq << " fin: " << newPack.FIN << endl;
                         timer[addr.sin_addr.S_un.S_addr] = clock();
                         if(readFile.peek() == EOF)  break;
                     }
@@ -380,8 +396,14 @@ void Server::lSend(u_long ip, string filePath)
 
                 WaitForSingleObject(hMutex, INFINITE);
                 UDP_PACK pack = packs.front();
-                packs.pop();
+                string info = string(pack.info);
+                string op = info.substr(0, 4);
+                if(op != "send")
+                    continue;
+                else
+                    packs.pop();
                 ReleaseMutex(hMutex);
+
 
                 if (pack.seq == ack)
                 {
@@ -399,6 +421,8 @@ void Server::lSend(u_long ip, string filePath)
                         confirm.seq = sendSeq++;
                         confirm.rwnd = ((RWND_MAX_SIZE - packs.size() <= 0) ? 1 : RWND_MAX_SIZE - packs.size());
                         sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&addr, addrLen);
+                        cerr << "lsend: ack: " << confirm.ack << " seq: " << confirm.seq << " fin: " << confirm.FIN << endl;
+
                         if (pack.FIN)
                         {
                             /* 结束 */
@@ -468,6 +492,7 @@ void Server::reTransfer()
                 SOCKADDR_IN cltAddr = ipToAddr[ipAddr];
                 // 重传
                 sendto(serSocket, (char *)&buffer.front(), sizeof(buffer.front()), 0, (sockaddr *)&cltAddr, addrLen);
+                cerr << "ReSend: ack: " << buffer.front().ack << " seq: " << buffer.front().seq << " fin: " << buffer.front().FIN << endl;
                 it->second = clock();
             }
             it++;
