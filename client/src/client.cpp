@@ -262,6 +262,7 @@ void Client::lsendOpResponse()
             else    win.pop();
             ReleaseMutex(hMutex);
 
+            // RTT计算
             clock_t end = clock();
             estimatedRTT = (end - pack.time) * 1.0 / CLOCKS_PER_SEC * 0.125 + estimatedRTT * 0.875;
 
@@ -347,7 +348,8 @@ void Client::lsendOpResponse()
                         // 读取文件
                         readFile.read((char *)&newPack.data, newPack.dataLength);
                         newPack.dataLength = readFile.gcount();
-                        if (readFile.peek() == EOF) {
+                        if (readFile.peek() == EOF)
+                        {
                             newPack.FIN = true;
                         }
                         newPack.totalByte = pool[i - 1].totalByte + newPack.dataLength;

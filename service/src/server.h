@@ -73,6 +73,9 @@ class Server
     // 冗余ack计算
     map<u_long, int> errorNum;
 
+    // RTT估计
+    map<u_long, double> estimateRTT;
+
   private : 
     string dataDir; // 文件地址
     int serPort;    // 服务端口

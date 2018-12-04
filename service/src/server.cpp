@@ -426,7 +426,7 @@ void Server::lSend(u_long ip, string filePath)
                         if (pack.FIN)
                         {
                             /* 结束 */
-
+                            WaitForSingleObject(hMutex, INFINITE);
                             // 清除相应配置信息
                             map<u_long, queue<UDP_PACK>>::iterator a = pool.find(addr.sin_addr.S_un.S_addr);
                             if (a != pool.end())
@@ -439,25 +439,15 @@ void Server::lSend(u_long ip, string filePath)
                             map<u_long, SOCKADDR_IN>::iterator c = ipToAddr.find(addr.sin_addr.S_un.S_addr);
                             if (c != ipToAddr.end())
                                 ipToAddr.erase(c);
+                            ReleaseMutex(hMutex);
 
                             waitAck[addr.sin_addr.S_un.S_addr] = 0;
-
+                            
                             cout << "Close connection with: " << ip << endl;
-
+                            
                             return;
                         }
                     }
-                }
-                else if(pack.seq > ack)
-                {
-                    // 接收到重复的包处理
-                    UDP_PACK confirm = pack;
-                    confirm.ack = ack;
-                    confirm.FIN = false;
-                    confirm.seq = sendSeq++;
-                    confirm.rwnd = ((RWND_MAX_SIZE - packs.size() <= 0) ? 1 : RWND_MAX_SIZE - packs.size());
-                    // 如果接收的seq和期待的不相同,重新发送
-                    sendto(serSocket, (char *)&confirm, sizeof(confirm), 0, (sockaddr *)&addr, addrLen);
                 }
             }
             
@@ -472,6 +462,7 @@ void Server::reTransfer()
 {
     while (true)
     {
+        if(timer.empty())   continue;
         map<u_long, clock_t>::iterator it = timer.begin();
         while (it != timer.end())
         {
