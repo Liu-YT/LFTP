@@ -4,7 +4,4 @@ service/data/
 # client/data
 client/data/
 
-# exe
-service/src/*.exe
-client/src/*.exe
 
