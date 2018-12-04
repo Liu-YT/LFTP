@@ -47,8 +47,9 @@ UDP_PACK数据包放在UDP数据部分进行传输
             <th colspan="1" align="center">ack - 确认号</th>
         </tr>
         <tr>
-            <td colspan="2" align="center">rwnd - 接收方的接收窗口空闲大小</td>
+            <td align="center">rwnd - 接收方的接收窗口空闲大小</td>
             <td align="center">FIN - 标志位</td>
+            <td align="center">timer - 发包时间</td>
         </tr>
         <tr>
             <td align="center">infoLength - info的长度</td>
