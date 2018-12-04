@@ -34,3 +34,9 @@
 * The default receive transfer file is stored in the `../data/` directory，both of the server and client
 * When using `lsend`, you need to give the file path relative to `src`, use relative path only for `/`
 * Please input the command parameters as required, otherwise unnecessary errors will occur
+
+## Design
+* [Design Document](./docs/Project_design.md)
+
+## Test
+* [Test Document](./docs/Project_test.md)
